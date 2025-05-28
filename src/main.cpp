@@ -153,19 +153,19 @@ int main() {
         BeginDrawing();
 	        ClearBackground({.r = 32, .g = 29, .b = 29, .a = 255});
 
+    		DrawText(TextFormat("%d FPS", GetFPS()), 5, 5, 10, {.r = 0, .g = 255, .b = 0, .a = 100});
     		if (!hideUI) {
     			if (GuiTextBox(ipBox, ipAddress, 32, ipEditMode)) ipEditMode = !ipEditMode;
-    			DrawText("Enter your console's IP address above!", 10, 45, 10, WHITE);
+    			DrawText("Enter your 3DS' IP address above!", 10, 45, 10, WHITE);
+    			DrawText("Press H to toggle UI visibility!", 10, 45 + 10 * 1 + 5, 10, PURPLE);
 
-    			DrawText(TextFormat("Gamepad #%d: %s", gamepadIndex, GetGamepadName(gamepadIndex) != nullptr ? GetGamepadName(gamepadIndex) : "[none]"), 10, 45 + 10 * 1 + 5, 10, WHITE);
-    			DrawText(TextFormat("Buttons: %d", hidPad), 10, 45 + 10 * 2 + 5, 10, WHITE);
 
-    			DrawText(TextFormat("Left joystick (circle pad): %d", circlePadState), 10, 45 + 10 * 3 + 10, 10, WHITE);
-    			DrawText(TextFormat("LX, LY: %f, %f", lx, ly), 10, 45 + 10 * 4 + 10, 10, WHITE);
+    			DrawText(TextFormat("Gamepad #%d: %s", gamepadIndex, GetGamepadName(gamepadIndex) != nullptr ? GetGamepadName(gamepadIndex) : "[none]"), 10, 45 + 10 * 2 + 10, 10, GRAY);
+    			DrawText(TextFormat("Buttons: %d", hidPad), 10, 45 + 10 * 3 + 10, 10, GRAY);
 
-    			DrawText("Press H to toggle UI visibility!", 10, 45 + 10 * 5 + 15, 10, LIGHTGRAY);
-    		} else {
-    			DrawFPS(5, 5);
+    			DrawText(TextFormat("Left joystick (circle pad): %d", circlePadState), 10, 45 + 10 * 4 + 15, 10, GRAY);
+    			DrawText(TextFormat("LX, LY: %f, %f", lx, ly), 10, 45 + 10 * 5 + 15, 10, GRAY);
+
     		}
     	EndDrawing();
     }
