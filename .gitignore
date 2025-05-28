@@ -36,5 +36,8 @@
 *.user
 
 # QMake build
-Makefile
 .qmake.stash
+
+# Misc.
+cmake-build-debug/
+.idea/
