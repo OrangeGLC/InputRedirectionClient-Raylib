@@ -1,20 +1,25 @@
 #include "raylib.h"
 #define RAYGUI_IMPLEMENTATION
-#include "raygui.h"
 #include <algorithm>
+#include <arpa/inet.h>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <string>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <string>
+#include <sys/socket.h>
 #include <unistd.h>
+#include "raygui.h"
+
+#include "GLFW/glfw3.h"
 
 #define CPAD_BOUND          0x5d0
 #define CPP_BOUND           0x7f
+
 #define TOUCH_SCREEN_WIDTH  320
 #define TOUCH_SCREEN_HEIGHT 240
+
+#define DEADZONE_MIN 	    0.05f
 
 typedef uint32_t u32;
 typedef uint16_t u16;
@@ -57,17 +62,19 @@ GamepadButton hidButtonsAB[] = {
 GamepadButton hidButtonsMiddle[] = {
 	GAMEPAD_BUTTON_MIDDLE_LEFT,      // Select
 	GAMEPAD_BUTTON_MIDDLE_RIGHT,     // Start
-	GAMEPAD_BUTTON_LEFT_FACE_UP,    // D-Pad Right
-	GAMEPAD_BUTTON_LEFT_FACE_LEFT,  // D-Pad Left
+
+	GAMEPAD_BUTTON_LEFT_FACE_RIGHT,  // D-Pad Right
+	GAMEPAD_BUTTON_LEFT_FACE_LEFT,   // D-Pad Left
 	GAMEPAD_BUTTON_LEFT_FACE_UP,     // D-Pad Up
 	GAMEPAD_BUTTON_LEFT_FACE_DOWN,   // D-Pad Down
-	GAMEPAD_BUTTON_RIGHT_TRIGGER_1,  // R1
-	GAMEPAD_BUTTON_LEFT_TRIGGER_1,   // L1
+
+	GAMEPAD_BUTTON_RIGHT_TRIGGER_1,  // 3DS R
+	GAMEPAD_BUTTON_LEFT_TRIGGER_1,   // 3DS L
 };
 
 GamepadButton hidButtonsXY[] = {
-	GAMEPAD_BUTTON_RIGHT_FACE_LEFT,  // X
 	GAMEPAD_BUTTON_RIGHT_FACE_UP,    // Y
+	GAMEPAD_BUTTON_RIGHT_FACE_LEFT,  // X
 };
 
 int main() {
@@ -75,25 +82,33 @@ int main() {
     SetTargetFPS(45);
 
 	bool hideUI = false;
-
 	bool ipEditMode = false;
-    Rectangle ipBox = { 10, 10, 200, 30 };
 
     while (!WindowShouldClose()) {
     	if (IsKeyPressed(KEY_LEFT) && gamepadIndex > 0 && !ipEditMode) gamepadIndex--;
-    	if (IsKeyPressed(KEY_RIGHT) && !ipEditMode) gamepadIndex++;
+    	if (IsKeyPressed(KEY_RIGHT) && gamepadIndex < GLFW_JOYSTICK_LAST && !ipEditMode) gamepadIndex++;
 
     	if (IsKeyPressed(KEY_H) && !ipEditMode) hideUI = !hideUI;
 
+    	GLFWgamepadstate state;
         u32 hidPad = 0xfff;
     	u32 circlePadState = 0x7ff7ff;
     	u32 cppState = 0x80800081;
 
     	if (IsGamepadAvailable(gamepadIndex)) {
-	        lx = GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_LEFT_X);
-        	ly = -GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_LEFT_Y) * yAxisMultiplier;
-        	rx = GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_RIGHT_X);
-        	ry = -GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_RIGHT_Y) * yAxisMultiplier;
+			if (!glfwGetGamepadState(gamepadIndex, &state) && glfwGetError(nullptr) == GLFW_NO_ERROR) {
+				TraceLog(LOG_WARNING, "Gamepad %d (%s) (%s) does not have a mapping.", gamepadIndex, glfwGetJoystickName(gamepadIndex), glfwGetJoystickGUID(gamepadIndex));
+			}
+
+    		lx = GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_LEFT_X);
+    		ly = -GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_LEFT_Y) * yAxisMultiplier;
+    		if (lx < DEADZONE_MIN && lx > -DEADZONE_MIN) lx = 0.0;
+    		if (ly < DEADZONE_MIN && ly > -DEADZONE_MIN) ly = 0.0;
+
+    		rx = GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_RIGHT_X);
+    		ry = -GetGamepadAxisMovement(gamepadIndex, GAMEPAD_AXIS_RIGHT_Y) * yAxisMultiplier;
+    		if (rx < DEADZONE_MIN && rx > -DEADZONE_MIN) rx = 0.0;
+    		if (ry < DEADZONE_MIN && ry > -DEADZONE_MIN) ry = 0.0;
 
         	// A and B buttons
         	for(u32 i = 0; i < 2; i++) {
@@ -102,12 +117,20 @@ int main() {
         		}
         	}
 
-        	// Middle buttons (Select, Start, D-Pad, R1, L1)
+        	// Middle buttons (Select, Start, D-Pad, R, L)
         	for(u32 i = 2; i < 10; i++)
         	{
         		if (IsGamepadButtonDown(gamepadIndex, hidButtonsMiddle[i - 2]))
         			hidPad &= ~(1 << i);
         	}
+
+    		// Make triggers act as R and L buttons
+    		if (IsGamepadButtonDown(gamepadIndex, GAMEPAD_BUTTON_RIGHT_TRIGGER_2)) {
+				hidPad &= ~(1 << 8); // R
+			}
+    		if (IsGamepadButtonDown(gamepadIndex, GAMEPAD_BUTTON_LEFT_TRIGGER_2)) {
+    			hidPad &= ~(1 << 9); // L
+    		}
 
         	// X and Y buttons
         	for(u32 i = 10; i < 12; i++)
@@ -141,10 +164,8 @@ int main() {
     	touchScreenPressed = IsMouseButtonDown(MOUSE_LEFT_BUTTON);
 
     	if (touchScreenPressed) {
-    		u32 x = static_cast<u32>(0xfff *
-		  std::min(std::max(0.0f, touchScreenPosition.x), static_cast<float>(TOUCH_SCREEN_WIDTH))) / TOUCH_SCREEN_WIDTH;
-    		u32 y = static_cast<u32>(0xfff *
-		  std::min(std::max(0.0f, touchScreenPosition.y), static_cast<float>(TOUCH_SCREEN_HEIGHT))) / TOUCH_SCREEN_HEIGHT;
+    		const u32 x = static_cast<u32>(0xfff * std::min(std::max(0.0f, touchScreenPosition.x), static_cast<float>(TOUCH_SCREEN_WIDTH))) / TOUCH_SCREEN_WIDTH;
+    		const u32 y = static_cast<u32>(0xfff * std::min(std::max(0.0f, touchScreenPosition.y), static_cast<float>(TOUCH_SCREEN_HEIGHT))) / TOUCH_SCREEN_HEIGHT;
     		touchScreenState = 1 << 24 | y << 12 | x;
     	}
 
@@ -153,18 +174,22 @@ int main() {
         BeginDrawing();
 	        ClearBackground({.r = 32, .g = 29, .b = 29, .a = 255});
 
-    		DrawText(TextFormat("%d FPS", GetFPS()), 5, 5, 10, {.r = 0, .g = 255, .b = 0, .a = 100});
     		if (!hideUI) {
-    			if (GuiTextBox(ipBox, ipAddress, 32, ipEditMode)) ipEditMode = !ipEditMode;
-    			DrawText("Enter your 3DS' IP address above!", 10, 45, 10, WHITE);
+    			DrawText(TextFormat("%d FPS", GetFPS()), 5, 5, 10, {.r = 0, .g = 255, .b = 0, .a = 100});
+
+    			if (constexpr Rectangle ipBox = {10, 10, 200, 30}; GuiTextBox(ipBox, ipAddress, 32, ipEditMode)) ipEditMode = !ipEditMode;
+    			DrawText("Enter your console's IP address above!", 10, 45, 10, WHITE);
     			DrawText("Press H to toggle UI visibility!", 10, 45 + 10 * 1 + 5, 10, PURPLE);
 
 
-    			DrawText(TextFormat("Gamepad #%d: %s", gamepadIndex, GetGamepadName(gamepadIndex) != nullptr ? GetGamepadName(gamepadIndex) : "[none]"), 10, 45 + 10 * 2 + 10, 10, GRAY);
+    			DrawText(TextFormat("Gamepad #%d: %s", gamepadIndex, glfwGetJoystickName(gamepadIndex) != nullptr ? glfwGetJoystickName(gamepadIndex) : "[none]"), 10, 45 + 10 * 2 + 10, 10, GRAY);
+
     			DrawText(TextFormat("Buttons: %d", hidPad), 10, 45 + 10 * 3 + 10, 10, GRAY);
 
     			DrawText(TextFormat("Left joystick (circle pad): %d", circlePadState), 10, 45 + 10 * 4 + 15, 10, GRAY);
     			DrawText(TextFormat("LX, LY: %f, %f", lx, ly), 10, 45 + 10 * 5 + 15, 10, GRAY);
+
+    			DrawText("This window acts as your console's touch screen.\nInteract using your cursor!", 5, GetScreenHeight()-25, 10, GRAY);
 
     		}
     	EndDrawing();
