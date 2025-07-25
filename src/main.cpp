@@ -33,8 +33,8 @@ bool abInverse = false;
 bool xyInverse = false;
 bool touchScreenPressed = false;
 Vector2 touchScreenPosition = {0, 0};
-char ipAddress[32] = "192.168.1.185";
-int gamepadIndex = 0;
+char ipAddress[32] = "192.168.50.154";
+int gamepadIndex = 1;
 
 void sendFrame(const char* ipAddress, u32 hidPad, u32 touchScreenState, u32 circlePadState, u32 cppState, u32 interfaceButtons) {
     unsigned char ba[20] = {};
